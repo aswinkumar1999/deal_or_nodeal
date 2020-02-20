@@ -3,6 +3,7 @@ import cv2
 from imutils.video import VideoStream
 from imutils.video import FPS
 import argparse
+
 import imutils
 import time
 from PIL import Image
