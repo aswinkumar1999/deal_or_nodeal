@@ -2,8 +2,7 @@ import numpy as np
 import cv2
 
 def get_iou(x, y):
-    boxA=4*[0]
-    boxB=4*[0]
+
     boxA[0] = x[0]
     boxA[1] = x[1]
     boxA[2] = x[2]+x[0]
