@@ -50,7 +50,7 @@ def get_iou(x, y):
     # return the intersection over union value
     return iou
 
-cap= cv2.VideoCapture('1.mp4')
+cap= cv2.VideoCapture('./Train_videos/1.mp4')
 
 conf_activate = 0
 conf_deactivate = 0
@@ -113,8 +113,7 @@ while True:
 
         ## Find and sort contours on area
         gray_cnt = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-        cnts = cv2.findContours(gray_cnt.copy(), cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE)
+        cnts = cv2.findContours(gray_cnt.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         cntsSorted = sorted(cnts, key=lambda x: cv2.contourArea(x))[-28:-3]
         cv2.drawContours(frame_copy1, cntsSorted, -1, (0, 255, 0), 3)
