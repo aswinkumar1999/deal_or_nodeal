@@ -6,10 +6,24 @@ from PIL import Image
 import pytesseract
 import os
 
+from sklearn.externals import joblib
+from skimage.feature import hog
+
+# Load the classifier
+clf = joblib.load("digits_cls.pkl")
+cv2.namedWindow("Resulting Image with Rectangular ROIs", cv2.WINDOW_NORMAL)
+
 cv2.namedWindow("cnts_canny_white",cv2.WINDOW_NORMAL)
 cv2.namedWindow("cnts_canny_red",cv2.WINDOW_NORMAL)
 cv2.namedWindow("red",cv2.WINDOW_NORMAL)
 cv2.namedWindow("white",cv2.WINDOW_NORMAL)
+cv2.namedWindow("ocr_img",cv2.WINDOW_NORMAL)
+
+def run_ocr(frame):
+    if True:
+        return run_ocr_tesseract(frame)
+    else:
+        return run_ocr_sklearn(frame)
 
 def get_iou(x, y):
     boxA = list(x)
@@ -45,21 +59,55 @@ def get_iou(x, y):
     # return the intersection over union value
     return iou
 
-cap= cv2.VideoCapture('./Train_videos/1.mp4')
+def run_ocr_sklearn(im_gray):
+    filename = "{}.png".format(os.getpid())
+    cv2.imwrite(filename, im_gray)
+    im = cv2.imread(filename)
+    # Read the input image 
+    a = time.time()
+    # Convert to grayscale and apply Gaussian filtering
+    im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    im_gray = cv2.GaussianBlur(im_gray, (5, 5), 0)
+    # im_gray = cv2.bitwise_not(im_gray)
+    # Threshold the image
+    ret, im_th = cv2.threshold(im_gray, 90, 255, cv2.THRESH_BINARY_INV)
+    im_th = cv2.bitwise_not(im_th)
 
-x1,y1,w1,h1 = 0,0,0,0
-threshold_iou = 0.95
+    cv2.imshow("th3",im_th)
 
-conf_activate, max_val, tries, count = 0,0,0,0
-is_moving, has_stopped, box_found = False, False, False
-box = None
+    # Find contours in the image
+    ctrs, hier = cv2.findContours(im_th.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-lower_white = np.array([0,0,194])
-upper_white = np.array([178,37,255])
-lower_red = np.array([90,79,71])
-upper_red = np.array([178,225,255])
+    # Get rectangles contains each contour
+    rects = [cv2.boundingRect(ctr) for ctr in ctrs]
 
-tracker = cv2.TrackerCSRT_create()
+    # For each rectangular region, calculate HOG features and predict
+    # the digit using Linear SVM.
+    text = ""
+    for rect in rects:
+        # Draw the rectangles
+        try:
+            cv2.rectangle(im, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (0, 255, 0), 3) 
+            # Make the rectangular region around the digit
+            leng = int(rect[3] * 1.6)
+            pt1 = int(rect[1] + rect[3] // 2 - leng // 2)
+            pt2 = int(rect[0] + rect[2] // 2 - leng // 2)
+            roi = im_th[pt1:pt1+leng, pt2:pt2+leng]
+            # Resize the image
+            roi = cv2.resize(roi, (28, 28), interpolation=cv2.INTER_AREA)
+            roi = cv2.dilate(roi, (3, 3))
+            # Calculate the HOG features
+            roi_hog_fd = hog(roi, orientations=9, pixels_per_cell=(14, 14), cells_per_block=(1, 1), visualise=False)
+            nbr = clf.predict(np.array([roi_hog_fd], 'float64'))
+            cv2.putText(im, str(int(nbr[0])), (rect[0], rect[1]),cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
+            text += str(int(nbr[0]))
+        except:
+            pass
+    print("text ",text)
+    cv2.waitKey(0)
+    os.remove(filename)
+
+    return text
 
 # Color masking and return contours
 def color_masking(frame, lower_range, upper_range, sensitivity = 40,ret_cnts = True):
@@ -84,9 +132,11 @@ def color_masking(frame, lower_range, upper_range, sensitivity = 40,ret_cnts = T
     return res1,cnts
 
 ## Pytesseract ocr-implementation !to-change
-def run_ocr(frame_ocr):
+def run_ocr_tesseract(frame_ocr):
+    global j
     filename = "{}.png".format(os.getpid())
-    # cv2.imshow("Ocr_img",res1[y+10:y+h-10,x+10:x+w-10])
+    cv2.imshow("ocr_img", frame_ocr)
+    # cv2.waitKey(0)
     cv2.imwrite(filename, frame_ocr)
     text = pytesseract.image_to_string(Image.open(filename))
     os.remove(filename)
@@ -108,6 +158,22 @@ def cleanup_cnts(cnts):
             area.append(w*h)
             coords.append([x, y, w, h])
     return zip(*sorted(zip(area, coords)))
+
+cap= cv2.VideoCapture('./Train_videos/1.mp4')
+
+x1,y1,w1,h1 = 0,0,0,0
+threshold_iou = 0.95
+
+conf_activate, max_val, tries, count = 0,0,0,0
+is_moving, has_stopped, box_found = False, False, False
+box = None
+
+lower_white = np.array([0,0,194])
+upper_white = np.array([178,37,255])
+lower_red = np.array([90,79,71])
+upper_red = np.array([178,225,255])
+
+tracker = cv2.TrackerCSRT_create()
 
 while True:
     a = time.time()
